@@ -1,0 +1,146 @@
+---
+title: "BD anal"
+author: "Wills et al"
+date: "Oct, 2018"
+output: html_document
+  toc: true
+  toc_float: true
+  
+---
+
+General Anlysis of DSP master data
+
+```{r setup, include=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+list.of.packages <- c("knitr", "tidyverse", "aqp", "readxl", "kableExtra", "purrr", "sharpshootR", "gridExtra")
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+
+library(knitr)
+library(tidyverse)
+library(purrr)
+library(aqp)
+library(readxl)
+library(kableExtra)
+library(sharpshootR)
+library(gridExtra)
+
+```
+
+Data import and prep
+
+```{r data, echo = F, message=F, warning=F. error = F}
+
+
+#POX (AC) sample pool used to select samples for further analysis
+BD_url <- 'https://nrcs.box.com/s/tomz9nl719v1e7r4y84d9rv7tn1vnnpz'
+ifelse(!file.exists('update_bd_methods_add_ARS_Oct18.xlsx'), download.file(BD_url, destfile = paste0('update_bd_methods_add_ARS_Oct18.xlsx')), "File already downloaded")
+
+#Full DSP data can be downloaded here:
+#https://nrcs.box.com/s/tomz9nl719v1e7r4y84d9rv7tn1vnnpz
+
+bd <- read_excel("update_bd_methods_add_ARS_Oct18.xlsx",  sheet = "BD_data")
+
+dsp <- read_excel("update_bd_methods_add_ARS_Oct18.xlsx",  sheet = "DSP_Pedon IDs")
+
+#join relevant dsp data to bd
+BD <- bd %>% left_join(dsp %>% select(natural_key, DSP_Project, Soil, Comparison, MGMT, DSP_Plot_ID, DSP_Pedon_ID, Crop, Agron_Feature), by = "natural_key")
+
+write_csv(BD, 'BD_compare.csv')
+
+
+```
+
+
+
+
+
+####Data Prep
+------------------
+```{r prep}
+#############
+BD <- read_csv('BD_compare.csv' , col_types = "cccccccnnccnnnnnccccccc")
+
+#when there is not project substitute the first word in the submit project name (extract from 1 to the first blank)
+BD$DSP_Project <- ifelse(!is.na(BD$DSP_Project), BD$DSP_Project, 
+                         substr(BD$submit_proj_name,1, regexpr(" ",BD$submit_proj_name)-1))
+
+BD$BD_diff <- BD$Clod - BD$Core
+
+BD$CROP <- ifelse(BD$Crop != "NA", BD$Crop, substr(BD$lay_field_label3, 1,4))
+
+
+
+
+```
+
+
+##SUMMARY PLOTS
+
+####properties should be selectable via dropdown menu
+```{r lm, message=F}
+
+#scatter plots of BD methods
+
+grid.arrange( 
+  BD %>% ggplot(aes(x = Clod, y = Core)) + geom_point(),
+  BD %>% ggplot(aes(x = Clod, y = Compliant_Cavity)) + geom_point(),
+  BD %>% ggplot(aes(x = Clod, y = ars_bd)) + geom_point() + scale_x_continuous(limits = c(0.5,2)) +
+    scale_y_continuous(limits = c(0.5, 2)),
+  BD %>% ggplot(aes(x = Core, y = ars_bd)) + geom_point()+ scale_x_continuous(limits = c(0.5,2)) +
+    scale_y_continuous(limits = c(0.5, 2)),
+ncol = 2)
+
+
+BD %>% ggplot(aes(x = Clod, y = BD_diff)) + geom_point()
+
+
+BD %>% ggplot(aes(x = Clod, y = Core)) + geom_point(aes(color = DSP_Project))
+
+BD %>% ggplot(aes(x = Clod, y = Core, color = DSP_Project)) + geom_point() + geom_smooth(method = "lm")
+
+
+#function to add regression equations
+ ggplotRegression <- function (fit) {
+ 
+ require(ggplot2)
+ 
+ ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+   geom_point() +
+   stat_smooth(method = "lm", col = "red") +
+   labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                      "Intercept =",signif(fit$coef[[1]],5 ),
+                      " Slope =",signif(fit$coef[[2]], 5),
+                      " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+
+ fit1 <- lm(Clod ~ Core,BD)
+ ggplotRegression(fit1)
+ 
+  fit2 <- lm(Clod ~ Compliant_Cavity, BD)
+ ggplotRegression(fit2)
+
+  fit_ars <- lm(Clod ~ ars_bd, BD)
+  ggplotRegression(fit_ars) 
+
+
+ fit_cores <- lm(Core ~ ars_bd, BD)
+  ggplotRegression(fit_cores) 
+
+
+```
+
+
+```{r box}
+
+bd <- BD %>% gather
+  gather(key = "Method", value = "BD", -c(lab_proj_name), Comp_layer)
+
+
+
+
+
+```
