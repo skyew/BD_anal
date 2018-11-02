@@ -2,10 +2,10 @@
 title: "BD anal"
 author: "Wills et al"
 date: "Oct, 2018"
-output:  
-  word_document: default
+output:
+  html_document: 
+    keep_md: true
 
-  
 ---
 
 General Anlysis of BD data collected.
